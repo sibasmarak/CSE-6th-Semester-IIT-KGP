@@ -1,0 +1,131 @@
+﻿Operating System Laboratory(CS39002): 
+ASSIGNMENT 5
+Implementation of multiple producer-consumer system where producers create prioritized jobs
+Group No. 22
+Siba Smarak Panigrahi: 18CS10069
+Somnath Jena: 18CS30047
+
+
+Process-based implementation
+Structures & Semaphores/mutexes used:
+1. job: struct job typedef to job is used to represent a job 
+2. shared_memory : struct shared_memory typedef to shared_memory is used to represent all the data that is shared between the processes. It includes the priority_queue of jobs and its attributes, jobs_created, jobs_completed, max_jobs, computed and 3 semaphores. The semaphores and their uses are as their follows: 
+   1. sem_t mutex: It is used to prevent race conditions while updating the priority_queue, i.e. insert_job in the priority_queue, remove_job from priority_queue and also while updating the integer counters job_created, job_completed and computed. It is also used inside the main process to prevent update to the integer variables when it tries to kill all the child processes after completion.
+   2. sem_t full: counting semaphore to prevent busy waiting while checking if the priority_queue is full
+   3. sem_t empty: counting semaphore to prevent busy waiting while checking if the priority_queue is empty
+
+
+Starting of producer and consumer  processes:
+The main process runs two separate loops for forking the producer and consumer processes. It sets a different seed for each child process using srand() and calls their respective function(producer() & consumer()).
+Functions used:
+1. shared_memory* init_shm(int shmid,int max_jobs);
+It is used to attach the shared memory to the memory segment and initialize the data structure variables. It initializes the semaphores as follows: mutex to 1, full to 0 and empty to MAX_QUEUE_SIZE. Note here we had to pass the second argument pshared to 1 to indicate that the semaphores are shared between processes.
+2. void producer(int shmid,int prod_no,pid_t prod_pid);
+The producer processes execute this function to produce jobs.
+   1. It attaches to the shared memory segment and initially checks for the condition if max_jobs (the input parameter by user to denote the maximum jobs to be created) have been created by producer processes. If true, then break from its execution.
+   2. The producer thread creates the job with create_job(), sleeps for a random interval of time between 0 and 3 seconds. Next it obtains the mutex and empty semaphore,  inserts the job into priority_queue, increments the job_created parameter, and finally signals full and mutex.
+   3. The algorithm is common for both types of implementation, which has been discussed separately.
+   3. void consumer(int shmid,int cons_no,pid_t cons_pid);
+The consumer processes execute this function to consume jobs.
+      1. It attaches to the shared memory segment initially.
+      2. The consumer then sleeps for a random interval of time between 0 and 3 seconds. Next it obtains full and mutex semaphores. Next it tries to retrieve a job from the priority_queue.
+      3. After that it signals the mutex semaphore.
+      4. If a job is retrieved(indicated by job_retrieved flag), it prints the job details. Then it obtains the mutex semaphore, increases the job_completed parameter and signals the mutex and empty semaphores. It then sleeps for compute time of the job.
+      5. After that it obtains the mutex semaphore to increment the computed parameter and signals it again..
+      4. job create_job(pid_t prod_pid, int prod_no);
+It is simply used to create a job using the process id and producer number given as input and it sets the prod_priority, comp_time and job_id using rand() function.(same in thread based implementation except that it takes the seed of the thread also as an input). 
+      5. void print_job(job j);
+It is used to print the job details. (Same in thread based implementation).
+Thread-based implementation
+Thread-based implementation is mostly similar to the process-based implementation. 
+Global shared variables & semaphores/mutexes used: 
+The threads of a single process share the code, data and files. Thus we have defined a struct job_queue which is similar to the struct shared_memory in the process. A global job_queue* queue is defined, which is thus shared amongst all the threads. We have used the same three semaphores for the entire problem in thread-based implementation also : sem_t mutex, sem_t full, and sem_t empty.
+
+
+Start routine for threads:
+The main thread creates all the producer and consumer threads in two separate for loops using pthread_create(). A start routine for producer thread (produce()) and a start routine for consumer threads (consume()) has been defined. Job creation and job consumption work is done in the respective start routines. 
+
+
+Functions used:
+         1. job_queue* init_queue(int max_jobs):
+         1. Initialize the struct members for queue: size, max_jobs, job_created, job_completed, computed 
+         2. Also initialize the various semaphore values: mutex with 1, full with 0, empty with MAX_QUEUE_SIZE
+         2. void* produce(void* p): 
+         1. It takes the producer number as input and initially checks for the condition if max_jobs (the input parameter by user to denote the maximum jobs to be created) have been created by producer processes. If true, then break from its execution.
+         2. The producer thread creates the job with create_job(), waits for a random interval of time between 0 and 3 seconds. Next it obtains the mutex and empty semaphore,  inserts the job into priority_queue, increments the job_created parameter, signals full and mutex.
+         3. The algorithm is common for both types of implementation, which has been discussed separately.
+         3. void* consume(void* p):
+         1. It again takes the consumer number as input. It waits for both mutex and full semaphores. 
+         2. Next it checks if there is at least one job in the priority_queue, if true, then retrieves the top priority job from the priority_queue, releases the mutex (so that other consumers can retrieve jobs from priority_queue), prints the details of retrieved jobs.
+         3. Then it waits for mutex again, to increment the completed member of the queue. After increment, signals the mutex and empty semaphores, waits for a random amount of time between 0 and 3 seconds. Waits for the mutex again, increments the computed member of the queue, signals the mutex.
+
+
+
+
+
+
+Implementation of priority queue:
+In both process and thread-based implementations, the priority queue has been implemented as a max heap array. The priority_queue array is an array of jobs of length equal to MAX_QUEUE_SIZE. The jobs are inserted in the array in order of their producer priorities. Inserting & removing jobs from the priority_queue both takes O(logn) time. Since the size of the priority queue is small both insertion and removal takes much less time even though the time complexity is O(logn). Following are the functions associated with the priority_queue:
+         1. void swap(job* j1,job* j2)
+It is simply used to swap two jobs in the array.
+         2. int parent(int i)
+It is used to get the parent index for the ith job in the array(equals to (i-1)/2).
+         3. int left(int i)
+It is used to get the left child index for the ith job in the array(equals to 2*i+1).
+         4. int right(int i)
+It is used to get the right child index for the ith job in the array(equals to 2*i+2).
+         5. void heapify(shared_memory* shm,int i)
+It is used to restore the max_heap property after a job removal.
+         6. void insert_job(job j) in thread, void insert_job(shared_memory* shm,job j)  in process
+It is used to insert a new job in the priority queue. It is initially inserted in the last available location in the array(size-1). Then it is moved up till its priority is greater than all its children’s priority.
+         7. job remove_job() in thread & job remove_job(shared_memory* shm) in process
+It is used to remove the highest priority job from the priority_queue. After removal heapify() is called to restore max heap property.
+Major Algorithm/Flow of execution used in both process and thread based implementations:
+            1. In parent process/thread:
+            1. All initializations of semaphores, threads, etc are done
+            2. Inside the main function the producers and consumers are created in two separate loops
+            3. In process based implementation, producer() and consumer() functions inside the producer and consumer processes respectively. In thread based implementation, the start routine passed as parameter in pthread_create is used to start their execution.
+            4. After creating all the producers and consumers the main function enters a while loop. Here it waits for the mutex semaphore, so that while it checks for job_created, job_completed and computed values they cannot be altered by any producer/consumer. If all these counters have reached the max_jobs value it prints the time taken to run all the jobs. In case of processes it kills all the processes using signal SIGTERM, while in case of threads it performs deferred cancellation using pthread_cancel. Then it signals the mutex semaphore.
+            2. In producer:
+            1. In process case the process attaches to the shared memory segment and starts an infinite loop while in thread case it directly starts the loop after setting its seed.
+            2. Inside the loop, first a check is performed to break if job_created has reached the max_jobs value
+            3. Then the producer creates a job and sleeps for a random interval of time.
+            4. Since when it will try to insert the newly created job in the priority_queue it will alter the shared memory, we have used semaphore before that. First it waits for the empty semaphore so that insertion is done when the priority_queue has space left. Then it waits for the mutex semaphore to actually insert the job.
+            5. It again breaks signalling the mutex semaphore if job_created equals max_jobs.
+            6. If there is space in the priority_queue, it inserts the job and then prints the job details and increments the job_created count. This part is the main critical section of the producer. After this it signals full and mutex semaphores. In the process case, the producer also detaches from the shared memory segment outside the loop.
+            3. In consumer:
+            1. In process case the process attaches to the shared memory segment and starts an infinite loop while in thread case it directly starts the loop after setting its seed.
+            2. Inside the loop, first the consumer sleeps for a random interval of time.
+            3. Since when it will try to remove/retrieve a job from priority_queue it will alter the shared memory, we have used semaphore before that. First it waits for the full semaphore so that removal is done when there are jobs in the priority_queue. Then it waits for the mutex semaphore to actually retrieve the job.
+            4. If priority_queue’s size is greater than zero it retrieves the maximum priority job. This is a critical section in consumer.
+            5. If job removal is performed it sets the flag job_retrieved and signals the mutex.
+            6. If a job is retrieved. It prints the job details. Then it has to increment the job_completed count which is shared. So it waits for mutex semaphore, increments job_completed(again a critical section) and signals the mutex.
+            7. Then it sleeps for compute time of the job retrieved. In order to let the consumer actually sleep for compute time and not be killed by the main process/thread if job_completed has reached max_jobs value, we have used another counter computed. So it waits for mutex, increments computed(again a critical section) and then signals mutex. In the process case, the consumer also detaches from the shared memory segment outside the loop.
+
+
+Major Differences between the two implementations
+            1. Passing the prod_no (producer number) and cons_no (consumer number) parameters: 
+The prod_no and cons_no have been directly passed to producer and consumer in process-based implementation, while in case of thread-based implementation, we have to explicitly define an array for both and pass the respective numbers from it.
+
+This is because processes do not share the variables without shared memory (IPC). Thus in each iteration of the for loop, the producer/consumer numbers are different for each respective producer and consumer. But in case of thread, the main thread passes the address of the iteration number (which is equal to producer/consumer number) as argument to start routines. Thus after creation of the final producer/consumer thread, the same address value is passed to each thread’s start routine. Hence we specifically created an int array to store the prod_no and cons_no, and pass the address from this array. Since now each address is different, the problem is resolved.
+               2. Sharing of variables 
+The shared variables in case of process are created in a shared memory (which is an Inter-process Communication mechanism). But in case of threads the priority queue and semaphores are shared inside a global structure named queue.
+
+
+This is because the threads of the same process share the code, global  data and files. Thus the global variables are shared between them. In the case of processes, we require shared memory to share data.
+               3. Thread ID and Process ID:
+The problem statement requires to assign the producer process or thread ID to the jobs created by the corresponding producer, and also to print the consumer process or thread ID. 
+
+
+In the case of process, we obtain the process ID with the help of getpid() routine in the child (producer/consumer) process. But in case of thread (producer/consumer) we use the function pthread_self() to obtain the thread ID in the start routine.
+               4. Killing of producers & consumers:
+In process based implementation the producer and consumer processes are simply killed by using SIGTERM signal in kill() function call.
+
+But if we use SIGTERM in pthread_kill() in case of threads then as per POSIX specifications, the entire process will be killed. Hence we have used pthread_cancel() to perform deferred cancellation in case of threads.
+               5. Seeding and random number generation:
+In the case of processes, the seed is set in the producer process using srand() and rand() is used to generate random numbers. Same thing cannot be done in the case of threads because srand() in one thread sets the seed the same for all threads. Hence we used rand_r() to generate random numbers with different seeds in each thread.
+Similar Data structures
+The data structures used in both the process-based and  thread-based are similar. A structure is defined which contains the required members, such as the jobs’ priority queue, semaphores, variables to store job created, job completed, and job computed. Also, the jobs’ priority queue is implemented as Max-Heap in both the cases. 
+
+
+The only difference is how this structure has been shared between the processes(shared memory) and threads (global variable).
